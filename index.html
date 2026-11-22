@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hồ Cá Thủy Tinh Sinh Động</title>
+    <!-- Tải Tailwind CSS để thiết kế giao diện hiện đại, đáp ứng mọi kích thước màn hình -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at 50% 20%, #1e293b 0%, #0f172a 60%, #020617 100%);
+            overflow-x: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        
+        .aquarium-frame {
+            box-shadow:
+                0 25px 60px -15px rgba(0, 0, 0, 0.8),
+                0 0 40px rgba(56, 189, 248, 0.15),
+                inset 0 0 25px rgba(255, 255, 255, 0.25),
+                inset 0 -10px 30px rgba(14, 116, 144, 0.4);
+            border: 3px solid rgba(186, 230, 253, 0.45);
+            position: relative;
+        }
+
+        
+        .glass-reflection {
+            background: linear-gradient(
+                115deg,
+                rgba(255, 255, 255, 0.16) 0%,
+                rgba(255, 255, 255, 0.04) 28%,
+                rgba(255, 255, 255, 0) 28.5%,
+                rgba(255, 255, 255, 0) 68%,
+                rgba(255, 255, 255, 0.06) 68.5%,
+                rgba(255, 255, 255, 0.01) 100%
+            );
+            pointer-events: none;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-3 sm:p-6 text-slate-100">
+
+    
+    <header class="text-center mb-4 sm:mb-6 max-w-xl">
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight bg-gradient-to-r from-cyan-300 via-sky-200 to-amber-200 bg-clip-text text-transparent">
+            Hồ Cá Thủy Tinh Tương Tác
+        </h1>
+        <p class="text-xs sm:text-sm text-slate-300/80 mt-1">
+            Chạm hoặc nhấp chuột vào bất kỳ đâu trong hồ để thả thức ăn cho cá
+        </p>
+    </header>
+
+    <main class="w-full max-w-4xl flex flex-col items-center">
+        <div id="tankContainer" class="aquarium-frame w-full aspect-[4/3] sm:aspect-[16/10] max-h-[70vh] rounded-3xl overflow-hidden bg-sky-950">
+            <canvas id="aquariumCanvas"></canvas>
+
+            <!-- Lớp phủ phản chiếu mặt kính -->
+            <div class="glass-reflection absolute inset-0 rounded-3xl"></div>
+
+            <!-- Huy hiệu thông tin nhỏ góc trên bên phải -->
+            <div class="absolute top-3 right-3 sm:top-4 sm:right-4 bg-slate-900/45 backdrop-blur-md border border-white/15 px-3 py-1.5 rounded-full text-xs text-cyan-100 flex items-center gap-2 pointer-events-none">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span id="statusText">Cá đang bơi thư giãn</span>
+            </div>
+        </div>
+
+        <!-- Đế gỗ/kim loại trang trí dưới bể cá -->
+        <div class="w-[94%] h-3 sm:h-4 bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 rounded-b-2xl shadow-xl border-x border-b border-slate-600/40"></div>
+
+        <!-- Thanh điều khiển tương tác phía dưới -->
+        <div class="mt-5 flex flex-wrap items-center justify-center gap-2.5 sm:gap-3">
+            <button id="btnFeed" class="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 active:scale-95 text-slate-950 font-semibold text-xs sm:text-sm shadow-lg shadow-amber-500/20 transition flex items-center gap-2 cursor-pointer">
+                <span>🍤</span> Thả thức ăn
+            </button>
+
+            <button id="btnSwitchFish" class="px-4 py-2.5 rounded-2xl bg-slate-800/90 hover:bg-slate-700/90 active:scale-95 text-sky-200 border border-sky-400/25 font-medium text-xs sm:text-sm shadow-lg transition flex items-center gap-2 cursor-pointer">
+                <span>🐠</span> Đổi loài cá: <strong id="fishTypeLabel" class="text-amber-300">Cá Vàng</strong>
+            </button>
+
+            <button id="btnBubbles" class="px-4 py-2.5 rounded-2xl bg-slate-800/90 hover:bg-slate-700/90 active:scale-95 text-cyan-200 border border-cyan-400/25 font-medium text-xs sm:text-sm shadow-lg transition flex items-center gap-2 cursor-pointer">
+                <span>🫧</span> Sủi bọt khí: <strong id="bubbleStateLabel" class="text-emerald-300">Bật</strong>
+            </button>
+        </div>
+    </main>
+
+    <script>
+        /**
+         * ỨNG DỤNG HỒ CÁ THỦY TINH SINH ĐỘNG
+         * Tác giả: Gemini
+         * Mô tả: Mô phỏng vật lý bơi lội 2D mượt mà, hiệu ứng ánh sáng xuyên nước,
+         * rong biển đung đưa, bọt khí và cơ chế cho cá ăn tương tác.
+         */
+
+        window.onload = function () {
+            const canvas = document.getElementById('aquariumCanvas');
+            const ctx = canvas.getContext('2d');
+            const container = document.getElementById('tankContainer');
+
+            // Các phần tử UI
+            const statusText = document.getElementById('statusText');
+            const btnFeed = document.getElementById('btnFeed');
+            const btnSwitchFish = document.getElementById('btnSwitchFish');
+            const fishTypeLabel = document.getElementById('fishTypeLabel');
+            const btnBubbles = document.getElementById('btnBubbles');
+            const bubbleStateLabel = document.getElementById('bubbleStateLabel');
+
+            // Biến kích thước logic của Canvas
+            let width = 0;
+            let height = 0;
+            let waterSurfaceY = 55; // Vị trí mặt nước tính từ đỉnh bể
+            let sandBaseY = 0;      // Vị trí nền cát dưới đáy
+
+            // Trạng thái hệ thống
+            let bubblesEnabled = true;
+            let lastTime = performance.now();
+            let elapsedTime = 0;
+
+            // Mảng chứa các thực thể trong hồ
+            let bubbles = [];
+            let foods = [];
+            let ripples = [];
+            let seaweeds = [];
+            let pebbles = [];
+            let lightRays = [];
+
+            /**
+             * Cập nhật kích thước Canvas chuẩn Retina/High-DPI khi tải trang hoặc đổi cỡ màn hình
+             */
+            function resizeCanvas() {
+                const rect = container.getBoundingClientRect();
+                const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+                width = rect.width;
+                height = rect.height;
+
+                canvas.width = Math.floor(width * dpr);
+                canvas.height = Math.floor(height * dpr);
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+                waterSurfaceY = Math.max(42, height * 0.11);
+                sandBaseY = height - Math.max(36, height * 0.11);
+
+                initEnvironment();
+            }
+
+            /**
+             * Khởi tạo cảnh quan đáy hồ: sỏi đá, rong biển và tia nắng
+             */
+            function initEnvironment() {
+                // 1. Tạo các bụi rong biển dọc theo đáy hồ
+                seaweeds = [];
+                const weedCount = Math.max(6, Math.floor(width / 95));
+                for (let i = 0; i < weedCount; i++) {
+                    const baseX = (width / (weedCount + 1)) * (i + 1) + (Math.random() - 0.5) * 35;
+                    const bladeCount = 2 + Math.floor(Math.random() * 3);
+                    for (let b = 0; b < bladeCount; b++) {
+                        seaweeds.push({
+                            x: baseX + (b - 1) * 10,
+                            baseY: sandBaseY + 8 + Math.random() * 10,
+                            height: height * (0.18 + Math.random() * 0.22),
+                            segments: 8,
+                            phase: Math.random() * Math.PI * 2,
+                            speed: 1.2 + Math.random() * 0.8,
+                            width: 7 + Math.random() * 5,
+                            hue: 130 + Math.random() * 35 // Tông xanh ngọc đến xanh lá
+                        });
+                    }
+                }
+
+                // 2. Tạo sỏi cuội nhiều màu tự nhiên rải rác trên nền cát
+                pebbles = [];
+                const pebbleColors = ['#64748b', '#94a3b8', '#78716c', '#a8a29e', '#b45309', '#475569', '#d6d3d1'];
+                const pebbleCount = Math.floor(width / 16);
+                for (let i = 0; i < pebbleCount; i++) {
+                    pebbles.push({
+                        x: Math.random() * width,
+                        y: sandBaseY + 6 + Math.random() * (height - sandBaseY - 12),
+                        rx: 4 + Math.random() * 9,
+                        ry: 2.5 + Math.random() * 5,
+                        rotation: (Math.random() - 0.5) * 0.4,
+                        color: pebbleColors[Math.floor(Math.random() * pebbleColors.length)]
+                    });
+                }
+
+                // 3. Tia sáng xuyên qua mặt nước
+                lightRays = [];
+                for (let i = 0; i < 6; i++) {
+                    lightRays.push({
+                        x: width * (0.15 + i * 0.14),
+                        topWidth: 25 + Math.random() * 35,
+                        bottomWidth: 90 + Math.random() * 90,
+                        angle: 0.12 + (Math.random() - 0.5) * 0.1,
+                        phase: Math.random() * Math.PI * 2,
+                        speed: 0.6 + Math.random() * 0.5
+                    });
+                }
+            }
+
+            /**
+             * ĐỐI TƯỢNG CHÚ CÁ CHÍNH
+             * Hỗ trợ 2 giao diện: 'goldfish' (Cá Vàng) và 'clownfish' (Cá Hề Nemo)
+             */
+            const fish = {
+                x: 250,
+                y: 220,
+                vx: 90,
+                vy: 10,
+                targetX: 400,
+                targetY: 200,
+                speed: 110,
+                baseSpeed: 105,
+                size: 34,
+                facing: 1,          // 1: hướng phải, -1: hướng trái
+                visualFacing: 1,    // Giá trị nội suy mượt từ -1 đến 1 khi quay đầu
+                pitch: 0,           // Góc chúi đầu lên/xuống
+                tailPhase: 0,       // Pha dao động vẫy đuôi
+                wanderTimer: 0,     // Bộ đếm thời gian đổi hướng tự do
+                species: 'goldfish',// 'goldfish' hoặc 'clownfish'
+                eatCooldown: 0,
+
+                // Cập nhật chuyển động mỗi khung hình
+                update(dt) {
+                    this.eatCooldown = Math.max(0, this.eatCooldown - dt);
+
+                    // Tìm viên thức ăn gần nhất nếu có
+                    let nearestFood = null;
+                    let minDist = Infinity;
+                    for (const food of foods) {
+                        const dx = food.x - this.x;
+                        const dy = food.y - this.y;
+                        const dist = Math.hypot(dx, dy);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            nearestFood = food;
+                        }
+                    }
+
+                    if (nearestFood) {
+                        // Chế độ săn mồi: bơi nhanh tới viên thức ăn
+                        this.targetX = nearestFood.x;
+                        this.targetY = nearestFood.y;
+                        this.speed = 210;
+                        statusText.textContent = 'Cá đang bơi lại ăn mồi!';
+
+                        // Kiểm tra nếu đã chạm miệng tới thức ăn
+                        const mouthX = this.x + this.visualFacing * (this.size * 0.85);
+                        const mouthY = this.y + Math.sin(this.pitch) * (this.size * 0.5);
+                        if (Math.hypot(nearestFood.x - mouthX, nearestFood.y - mouthY) < 22) {
+                            // Ăn thức ăn
+                            const idx = foods.indexOf(nearestFood);
+                            if (idx > -1) foods.splice(idx, 1);
+
+                            // Tạo vài bong bóng nhỏ thích thú khi ăn
+                            for (let i = 0; i < 4; i++) {
+                                spawnBubble(mouthX, mouthY - 5, 2 + Math.random() * 2.5);
+                            }
+                            this.eatCooldown = 0.4;
+                        }
+                    } else {
+                        // Chế độ bơi lội tự do thư giãn
+                        this.speed += (this.baseSpeed - this.speed) * 3 * dt;
+                        statusText.textContent = 'Cá đang bơi thư giãn';
+
+                        this.wanderTimer -= dt;
+                        const distToTarget = Math.hypot(this.targetX - this.x, this.targetY - this.y);
+
+                        // Đổi mục tiêu mới khi gần tới đích hoặc hết thời gian
+                        if (this.wanderTimer <= 0 || distToTarget < 45) {
+                            this.pickNewWanderTarget();
+                        }
+                    }
+
+                    // Tính toán vector hướng tới mục tiêu
+                    const dx = this.targetX - this.x;
+                    const dy = this.targetY - this.y;
+                    const dist = Math.max(1, Math.hypot(dx, dy));
+
+                    const desiredVx = (dx / dist) * this.speed;
+                    const desiredVy = (dy / dist) * this.speed;
+
+                    // Lái mượt mà (steering force) giúp cá lượn vòng tự nhiên
+                    const turnResponsiveness = nearestFood ? 4.5 : 2.2;
+                    this.vx += (desiredVx - this.vx) * turnResponsiveness * dt;
+                    this.vy += (desiredVy - this.vy) * turnResponsiveness * dt;
+
+                    // Cộng thêm dao động lượn sóng nhẹ theo trục dọc
+                    const swimWave = Math.sin(elapsedTime * 3.2) * 14;
+                    this.x += this.vx * dt;
+                    this.y += (this.vy + swimWave) * dt;
+
+                    // Giới hạn an toàn không để cá bơi ra ngoài thành kính, mặt nước hoặc đáy cát
+                    const marginX = this.size * 1.45;
+                    const minY = waterSurfaceY + this.size * 0.9;
+                    const maxY = sandBaseY - this.size * 0.9;
+
+                    if (this.x < marginX) {
+                        this.x = marginX;
+                        this.vx = Math.abs(this.vx) * 0.8;
+                        this.pickNewWanderTarget(1);
+                    } else if (this.x > width - marginX) {
+                        this.x = width - marginX;
+                        this.vx = -Math.abs(this.vx) * 0.8;
+                        this.pickNewWanderTarget(-1);
+                    }
+
+                    if (this.y < minY) {
+                        this.y = minY;
+                        this.vy = Math.abs(this.vy) * 0.5;
+                    } else if (this.y > maxY) {
+                        this.y = maxY;
+                        this.vy = -Math.abs(this.vy) * 0.5;
+                    }
+
+                    // Xác định hướng quay đầu (trái/phải) và nội suy mượt mà
+                    if (Math.abs(this.vx) > 8) {
+                        this.facing = this.vx >= 0 ? 1 : -1;
+                    }
+                    this.visualFacing += (this.facing - this.visualFacing) * 7.5 * dt;
+
+                    // Góc nghiêng thân cá khi bơi lên hoặc lặn xuống
+                    const currentSpeed = Math.hypot(this.vx, this.vy);
+                    const targetPitch = Math.max(-0.42, Math.min(0.42, this.vy / Math.max(80, currentSpeed) * 0.55));
+                    this.pitch += (targetPitch - this.pitch) * 5 * dt;
+
+                    // Tốc độ vẫy đuôi tỉ lệ thuận với tốc độ bơi
+                    const tailFreq = 7 + (currentSpeed / this.baseSpeed) * 7;
+                    this.tailPhase += tailFreq * dt;
+
+                    // Thỉnh thoảng cá nhả 1 bong bóng nhỏ từ miệng
+                    if (Math.random() < 0.45 * dt) {
+                        const mouthX = this.x + this.visualFacing * (this.size * 0.9);
+                        spawnBubble(mouthX, this.y, 1.8 + Math.random() * 1.8);
+                    }
+                },
+
+                // Chọn điểm đến ngẫu nhiên mới bên trong vùng nước
+                pickNewWanderTarget(forcedDir = 0) {
+                    const marginX = this.size * 1.8;
+                    const minY = waterSurfaceY + this.size * 1.2;
+                    const maxY = sandBaseY - this.size * 1.2;
+
+                    if (forcedDir === 1) {
+                        this.targetX = width * (0.45 + Math.random() * 0.45);
+                    } else if (forcedDir === -1) {
+                        this.targetX = width * (0.1 + Math.random() * 0.45);
+                    } else {
+                        this.targetX = marginX + Math.random() * Math.max(50, width - marginX * 2);
+                    }
+                    this.targetY = minY + Math.random() * Math.max(40, maxY - minY);
+                    this.wanderTimer = 2.2 + Math.random() * 3.0;
+                },
+
+                // Vẽ chú cá chi tiết với vây, đuôi, vảy và biểu cảm
+                draw(ctx) {
+                    ctx.save();
+                    ctx.translate(this.x, this.y);
+
+                    // Xoay nghiêng theo hướng bơi lên/xuống
+                    ctx.rotate(this.pitch * this.visualFacing);
+                    // Co giãn trục X theo visualFacing tạo hiệu ứng quay đầu 3D mượt mà
+                    ctx.scale(this.visualFacing, 1);
+
+                    const s = this.size;
+                    const tailSwing = Math.sin(this.tailPhase) * (s * 0.28);
+                    const finFlutter = Math.cos(this.tailPhase * 0.8) * 0.18;
+
+                    if (this.species === 'goldfish') {
+                        this.drawGoldfish(ctx, s, tailSwing, finFlutter);
+                    } else {
+                        this.drawClownfish(ctx, s, tailSwing, finFlutter);
+                    }
+
+                    ctx.restore();
+                },
+
+                // Giao diện 1: Cá Vàng đuôi lụa rực rỡ
+                drawGoldfish(ctx, s, tailSwing, finFlutter) {
+                    // 1. Đuôi lụa mềm mại phía sau (2 thùy)
+                    ctx.save();
+                    const tailGrad = ctx.createLinearGradient(-s * 0.7, 0, -s * 1.85, tailSwing);
+                    tailGrad.addColorStop(0, '#f97316');
+                    tailGrad.addColorStop(0.55, '#fb923c');
+                    tailGrad.addColorStop(1, 'rgba(254, 215, 170, 0.75)');
+
+                    ctx.fillStyle = tailGrad;
+                    // Thùy đuôi trên
+                    ctx.beginPath();
+                    ctx.moveTo(-s * 0.65, -s * 0.08);
+                    ctx.bezierCurveTo(
+                        -s * 1.25, -s * 0.65 + tailSwing * 0.6,
+                        -s * 1.75, -s * 0.55 + tailSwing * 1.2,
+                        -s * 1.85, -s * 0.05 + tailSwing
+                    );
+                    ctx.quadraticCurveTo(-s * 1.25, 0 + tailSwing * 0.5, -s * 0.65, 0);
+                    ctx.fill();
+
+                    // Thùy đuôi dưới
+                    ctx.beginPath();
+                    ctx.moveTo(-s * 0.65, s * 0.08);
+                    ctx.bezierCurveTo(
+                        -s * 1.25, s * 0.68 + tailSwing * 0.6,
+                        -s * 1.72, s * 0.62 + tailSwing * 1.2,
+                        -s * 1.8, s * 0.12 + tailSwing
+                    );
+                    ctx.quadraticCurveTo(-s * 1.2, s * 0.04 + tailSwing * 0.5, -s * 0.65, 0);
+                    ctx.fill();
+                    ctx.restore();
+
+                    // 2. Vây lưng
+                    ctx.fillStyle = 'rgba(251, 146, 60, 0.85)';
+                    ctx.beginPath();
+                    ctx.moveTo(-s * 0.35, -s * 0.38);
+                    ctx.quadraticCurveTo(-s * 0.1, -s * 0.82, s * 0.25, -s * 0.36);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    // 3. Vây bụng dưới
+                    ctx.beginPath();
+                    ctx.moveTo(-s * 0.25, s * 0.36);
+                    ctx.quadraticCurveTo(-s * 0.45, s * 0.68, -s * 0.05, s * 0.38);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    // 4. Thân cá bầu bĩnh chuyển sắc vàng cam ánh kim
+                    const bodyGrad = ctx.createRadialGradient(s * 0.15, -s * 0.12, s * 0.1, 0, 0, s * 0.95);
+                    bodyGrad.addColorStop(0, '#fef08a');
+                    bodyGrad.addColorStop(0.45, '#fb923c');
+                    bodyGrad.addColorStop(0.85, '#ea580c');
+                    bodyGrad.addColorStop(1, '#c2410c');
+
+                    ctx.fillStyle = bodyGrad;
+                    ctx.beginPath();
+                    ctx.moveTo(s * 0.92, 0);
+                    ctx.bezierCurveTo(s * 0.72, -s * 0.55, -s * 0.35, -s * 0.52, -s * 0.75, 0);
+                    ctx.bezierCurveTo(-s * 0.35, s * 0.52, s * 0.72, s * 0.55, s * 0.92, 0);
+                    ctx.fill();
+
+                    // 5. Vảy lấp lánh nhẹ trên thân
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+                    ctx.lineWidth = 1.2;
+                    for (let row = -1; row <= 1; row++) {
+                        for (let col = -1; col <= 1; col++) {
+                            ctx.beginPath();
+                            ctx.arc(col * s * 0.22 - 2, row * s * 0.16, s * 0.13, -Math.PI * 0.4, Math.PI * 0.4);
+                            ctx.stroke();
+                        }
+                    }
+
+                    // 6. Vây ngực vẫy nhịp nhàng
+                    ctx.save();
+                    ctx.translate(s * 0.18, s * 0.18);
+                    ctx.rotate(finFlutter);
+                    ctx.fillStyle = 'rgba(254, 215, 170, 0.85)';
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.quadraticCurveTo(-s * 0.28, s * 0.38, -s * 0.45, s * 0.12);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.restore();
+
+                    // 7. Mắt to tròn linh hoạt
+                    this.drawEye(ctx, s * 0.54, -s * 0.12, s * 0.14);
+
+                    // 8. Miệng nhỏ xinh
+                    ctx.strokeStyle = '#9a3412';
+                    ctx.lineWidth = 1.8;
+                    ctx.beginPath();
+                    ctx.arc(s * 0.86, s * 0.05, s * 0.08, Math.PI * 0.7, Math.PI * 1.25);
+                    ctx.stroke();
+                },
+
+                // Giao diện 2: Cá Hề (Clownfish) cam sọc trắng viền đen
+                drawClownfish(ctx, s, tailSwing, finFlutter) {
+                    // 1. Đuôi tròn đặc trưng của cá hề
+                    ctx.fillStyle = '#ea580c';
+                    ctx.strokeStyle = '#1e293b';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(-s * 0.65, 0);
+                    ctx.quadraticCurveTo(-s * 1.35, -s * 0.52 + tailSwing, -s * 1.35, tailSwing);
+                    ctx.quadraticCurveTo(-s * 1.35, s * 0.52 + tailSwing, -s * 0.65, 0);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // 2. Vây lưng
+                    ctx.fillStyle = '#f97316';
+                    ctx.beginPath();
+                    ctx.moveTo(-s * 0.35, -s * 0.35);
+                    ctx.quadraticCurveTo(-s * 0.05, -s * 0.72, s * 0.28, -s * 0.32);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // 3. Thân cá hề
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(s * 0.9, 0);
+                    ctx.bezierCurveTo(s * 0.68, -s * 0.5, -s * 0.38, -s * 0.48, -s * 0.75, 0);
+                    ctx.bezierCurveTo(-s * 0.38, s * 0.48, s * 0.68, s * 0.5, s * 0.9, 0);
+                    ctx.clip(); // Cắt các dải sọc trắng nằm gọn trong thân
+
+                    // Nền cam rực
+                    ctx.fillStyle = '#f97316';
+                    ctx.fillRect(-s, -s, s * 2, s * 2);
+
+                    // Các sọc trắng viền đen đặc trưng
+                    const stripes = [
+                        { x: s * 0.34, w: s * 0.16 },
+                        { x: -s * 0.12, w: s * 0.2 },
+                        { x: -s * 0.56, w: s * 0.13 }
+                    ];
+                    for (const st of stripes) {
+                        ctx.fillStyle = '#0f172a';
+                        ctx.fillRect(st.x - st.w * 0.5 - 2.5, -s, st.w + 5, s * 2);
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(st.x - st.w * 0.5, -s, st.w, s * 2);
+                    }
+                    ctx.restore();
+
+                    // 4. Vây ngực viền đen
+                    ctx.save();
+                    ctx.translate(s * 0.12, s * 0.14);
+                    ctx.rotate(finFlutter);
+                    ctx.fillStyle = '#fb923c';
+                    ctx.strokeStyle = '#0f172a';
+                    ctx.lineWidth = 1.8;
+                    ctx.beginPath();
+                    ctx.ellipse(-s * 0.18, s * 0.12, s * 0.22, s * 0.12, -0.4, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                    ctx.restore();
+
+                    // 5. Mắt
+                    this.drawEye(ctx, s * 0.58, -s * 0.1, s * 0.13);
+                },
+
+                // Hàm vẽ mắt cá có ánh sáng phản chiếu
+                drawEye(ctx, ex, ey, r) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.beginPath();
+                    ctx.arc(ex, ey, r, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.fillStyle = '#0f172a';
+                    ctx.beginPath();
+                    ctx.arc(ex + r * 0.22, ey, r * 0.58, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.fillStyle = '#ffffff';
+                    ctx.beginPath();
+                    ctx.arc(ex + r * 0.38, ey - r * 0.25, r * 0.22, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            };
+
+            /**
+             * Tạo một bong bóng khí mới
+             */
+            function spawnBubble(x, y, radius = null) {
+                bubbles.push({
+                    x: x,
+                    y: y,
+                    r: radius || (2.5 + Math.random() * 4.5),
+                    vy: 35 + Math.random() * 45,
+                    wobblePhase: Math.random() * Math.PI * 2,
+                    wobbleSpeed: 2.5 + Math.random() * 2.5
+                });
+            }
+
+            /**
+             * Thả thức ăn tại tọa độ (x, y) và tạo sóng gợn mặt nước
+             */
+            function dropFoodAt(x, y) {
+                // Nếu click ở vùng trên cao, thả thức ăn từ mặt nước rơi xuống
+                const spawnY = Math.max(waterSurfaceY + 4, Math.min(y, sandBaseY - 15));
+
+                // Tạo hiệu ứng gợn sóng trên mặt nước ngay phía trên vị trí nhấp
+                ripples.push({
+                    x: x,
+                    radius: 4,
+                    maxRadius: 48,
+                    alpha: 0.85
+                });
+
+                // Thả 1 đến 3 hạt thức ăn nhỏ
+                const count = 2;
+                for (let i = 0; i < count; i++) {
+                    foods.push({
+                        x: x + (Math.random() - 0.5) * 18,
+                        y: spawnY + (Math.random() - 0.5) * 8,
+                        vy: 24 + Math.random() * 14, // Chìm từ từ trong nước
+                        driftPhase: Math.random() * Math.PI * 2,
+                        radius: 3.8 + Math.random() * 1.2,
+                        life: 18 // Tự tan sau 18 giây nếu cá chưa ăn hết
+                    });
+                }
+            }
+
+            /**
+             * VẼ TOÀN BỘ KHUNG CẢNH HỒ CÁ
+             */
+            function drawScene(dt) {
+                ctx.clearRect(0, 0, width, height);
+
+                // 1. Nền không gian phía trên mặt nước (kính trong)
+                const airGrad = ctx.createLinearGradient(0, 0, 0, waterSurfaceY + 15);
+                airGrad.addColorStop(0, '#082f49');
+                airGrad.addColorStop(1, '#0c4a6e');
+                ctx.fillStyle = airGrad;
+                ctx.fillRect(0, 0, width, waterSurfaceY + 15);
+
+                // 2. Khối nước chính với dải màu sâu thẳm chân thực
+                const waterGrad = ctx.createLinearGradient(0, waterSurfaceY, 0, height);
+                waterGrad.addColorStop(0, '#0ea5e9');
+                waterGrad.addColorStop(0.25, '#0284c7');
+                waterGrad.addColorStop(0.7, '#0369a1');
+                waterGrad.addColorStop(1, '#082f49');
+                ctx.fillStyle = waterGrad;
+                ctx.fillRect(0, waterSurfaceY, width, height - waterSurfaceY);
+
+                // 3. Các tia ánh sáng xuyên qua mặt nước (God rays)
+                ctx.save();
+                for (const ray of lightRays) {
+                    const sway = Math.sin(elapsedTime * ray.speed + ray.phase) * 28;
+                    const topX = ray.x + sway;
+                    const botX = topX + Math.sin(ray.angle) * (height * 0.75) + sway * 0.6;
+
+                    const rayGrad = ctx.createLinearGradient(topX, waterSurfaceY, botX, sandBaseY);
+                    rayGrad.addColorStop(0, 'rgba(224, 242, 254, 0.22)');
+                    rayGrad.addColorStop(0.6, 'rgba(125, 211, 252, 0.08)');
+                    rayGrad.addColorStop(1, 'rgba(125, 211, 252, 0)');
+
+                    ctx.fillStyle = rayGrad;
+                    ctx.beginPath();
+                    ctx.moveTo(topX - ray.topWidth * 0.5, waterSurfaceY);
+                    ctx.lineTo(topX + ray.topWidth * 0.5, waterSurfaceY);
+                    ctx.lineTo(botX + ray.bottomWidth * 0.5, sandBaseY);
+                    ctx.lineTo(botX - ray.bottomWidth * 0.5, sandBaseY);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+                ctx.restore();
+
+                // 4. Mặt nước gợn sóng 2 lớp (lớp sau và lớp trước)
+                drawWaterSurface();
+
+                // 5. Nền cát vàng uốn lượn dưới đáy hồ
+                drawSandBed();
+
+                // 6. Sỏi đá dưới đáy
+                for (const p of pebbles) {
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate(p.rotation);
+                    ctx.fillStyle = p.color;
+                    ctx.beginPath();
+                    ctx.ellipse(0, 0, p.rx, p.ry, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Điểm sáng nhỏ trên viên sỏi
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+                    ctx.beginPath();
+                    ctx.ellipse(-p.rx * 0.25, -p.ry * 0.3, p.rx * 0.45, p.ry * 0.25, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+
+                // 7. Rong biển đung đưa theo dòng nước
+                drawSeaweeds();
+
+                // 8. Hệ thống sủi bọt khí liên tục từ góc đáy hồ
+                if (bubblesEnabled && Math.random() < 4.5 * dt) {
+                    const aeratorX = width * 0.14 + (Math.random() - 0.5) * 18;
+                    spawnBubble(aeratorX, sandBaseY + 2);
+                }
+
+                // Cập nhật và vẽ bong bóng
+                for (let i = bubbles.length - 1; i >= 0; i--) {
+                    const b = bubbles[i];
+                    b.y -= b.vy * dt;
+                    b.x += Math.sin(elapsedTime * b.wobbleSpeed + b.wobblePhase) * 16 * dt;
+
+                    // Vỡ bong bóng khi chạm mặt nước
+                    if (b.y <= waterSurfaceY + 2) {
+                        bubbles.splice(i, 1);
+                        continue;
+                    }
+
+                    ctx.save();
+                    ctx.strokeStyle = 'rgba(224, 242, 254, 0.75)';
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+                    ctx.lineWidth = 1.2;
+                    ctx.beginPath();
+                    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Điểm phản chiếu sáng trên bong bóng
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+                    ctx.beginPath();
+                    ctx.arc(b.x - b.r * 0.32, b.y - b.r * 0.32, b.r * 0.28, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+
+                // 9. Cập nhật và vẽ các hạt thức ăn đang chìm
+                for (let i = foods.length - 1; i >= 0; i--) {
+                    const f = foods[i];
+                    f.life -= dt;
+                    if (f.life <= 0) {
+                        foods.splice(i, 1);
+                        continue;
+                    }
+
+                    // Nếu chưa chạm đáy cát thì tiếp tục chìm nhẹ và lắc lư
+                    if (f.y < sandBaseY + 2) {
+                        f.y += f.vy * dt;
+                        f.x += Math.sin(elapsedTime * 3 + f.driftPhase) * 10 * dt;
+                    }
+
+                    // Vẽ viên thức ăn màu nâu đỏ có viền sáng
+                    ctx.save();
+                    ctx.fillStyle = '#d97706';
+                    ctx.strokeStyle = '#fef3c7';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.arc(f.x, f.y, f.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                    ctx.restore();
+                }
+
+                // 10. Cập nhật và vẽ chú cá
+                fish.update(dt);
+                fish.draw(ctx);
+
+                // 11. Vẽ hiệu ứng vòng sóng lan tỏa khi người dùng thả thức ăn
+                for (let i = ripples.length - 1; i >= 0; i--) {
+                    const rp = ripples[i];
+                    rp.radius += 55 * dt;
+                    rp.alpha -= 1.1 * dt;
+                    if (rp.alpha <= 0) {
+                        ripples.splice(i, 1);
+                        continue;
+                    }
+
+                    ctx.save();
+                    ctx.strokeStyle = `rgba(224, 242, 254, ${rp.alpha})`;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.ellipse(rp.x, waterSurfaceY, rp.radius, rp.radius * 0.24, 0, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+
+            /**
+             * Vẽ mặt nước gợn sóng lấp lánh
+             */
+            function drawWaterSurface() {
+                // Lớp sóng phía sau
+                ctx.fillStyle = 'rgba(56, 189, 248, 0.35)';
+                ctx.beginPath();
+                ctx.moveTo(0, waterSurfaceY);
+                for (let x = 0; x <= width; x += 15) {
+                    const y = waterSurfaceY + Math.sin(x * 0.025 + elapsedTime * 2.2) * 3.5;
+                    ctx.lineTo(x, y);
+                }
+                ctx.lineTo(width, waterSurfaceY + 20);
+                ctx.lineTo(0, waterSurfaceY + 20);
+                ctx.closePath();
+                ctx.fill();
+
+                // Đường viền sáng lấp lánh trên mặt nước chính
+                ctx.strokeStyle = 'rgba(224, 242, 254, 0.75)';
+                ctx.lineWidth = 2.2;
+                ctx.beginPath();
+                for (let x = 0; x <= width; x += 10) {
+                    const y = waterSurfaceY + Math.sin(x * 0.03 - elapsedTime * 2.8) * 3;
+                    if (x === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
+
+            /**
+             * Vẽ nền cát mềm mại dưới đáy hồ
+             */
+            function drawSandBed() {
+                const sandGrad = ctx.createLinearGradient(0, sandBaseY - 10, 0, height);
+                sandGrad.addColorStop(0, '#fde68a');
+                sandGrad.addColorStop(0.35, '#eab308');
+                sandGrad.addColorStop(1, '#a16207');
+
+                ctx.fillStyle = sandGrad;
+                ctx.beginPath();
+                ctx.moveTo(0, height);
+                ctx.lineTo(0, sandBaseY);
+
+                // Tạo các đồi cát thoai thoải
+                for (let x = 0; x <= width; x += 20) {
+                    const dune = Math.sin(x * 0.012) * 6 + Math.cos(x * 0.025) * 3;
+                    ctx.lineTo(x, sandBaseY + dune);
+                }
+
+                ctx.lineTo(width, height);
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            /**
+             * Vẽ các lá rong biển đung đưa mềm mại
+             */
+            function drawSeaweeds() {
+                for (const sw of seaweeds) {
+                    ctx.save();
+                    const grad = ctx.createLinearGradient(sw.x, sw.baseY, sw.x, sw.baseY - sw.height);
+                    grad.addColorStop(0, `hsl(${sw.hue}, 65%, 24%)`);
+                    grad.addColorStop(1, `hsl(${sw.hue + 10}, 75%, 45%)`);
+                    ctx.fillStyle = grad;
+
+                    const leftPoints = [];
+                    const rightPoints = [];
+                    const stepH = sw.height / sw.segments;
+
+                    for (let i = 0; i <= sw.segments; i++) {
+                        const ratio = i / sw.segments;
+                        const sway = Math.sin(elapsedTime * sw.speed + sw.phase + ratio * 2.5) * (ratio * 18);
+                        const currX = sw.x + sway;
+                        const currY = sw.baseY - i * stepH;
+                        const halfW = sw.width * (1 - ratio * 0.85) * 0.5;
+
+                        leftPoints.push({ x: currX - halfW, y: currY });
+                        rightPoints.push({ x: currX + halfW, y: currY });
+                    }
+
+                    ctx.beginPath();
+                    ctx.moveTo(leftPoints[0].x, leftPoints[0].y);
+                    for (let i = 1; i < leftPoints.length; i++) {
+                        ctx.lineTo(leftPoints[i].x, leftPoints[i].y);
+                    }
+                    for (let i = rightPoints.length - 1; i >= 0; i--) {
+                        ctx.lineTo(rightPoints[i].x, rightPoints[i].y);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
+
+            /**
+             * Vòng lặp hoạt ảnh chính 60fps
+             */
+            function animate(now) {
+                const dt = Math.min((now - lastTime) / 1000, 0.05); // Giới hạn dt tránh nhảy khung hình
+                lastTime = now;
+                elapsedTime += dt;
+
+                drawScene(dt);
+                requestAnimationFrame(animate);
+            }
+
+            // --- XỬ LÝ SỰ KIỆN TƯƠNG TÁC NGƯỜI DÙNG ---
+
+            // Nhấp chuột hoặc chạm vào hồ để thả thức ăn
+            canvas.addEventListener('pointerdown', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const clickY = e.clientY - rect.top;
+                dropFoodAt(clickX, clickY);
+            });
+
+            // Nút "Thả thức ăn" thả ngẫu nhiên 3 vị trí trên mặt nước
+            btnFeed.addEventListener('click', () => {
+                for (let i = 0; i < 3; i++) {
+                    const rx = width * (0.2 + Math.random() * 0.6);
+                    dropFoodAt(rx, waterSurfaceY + 8);
+                }
+            });
+
+            // Nút đổi loài cá giữa Cá Vàng và Cá Hề
+            btnSwitchFish.addEventListener('click', () => {
+                if (fish.species === 'goldfish') {
+                    fish.species = 'clownfish';
+                    fishTypeLabel.textContent = 'Cá Hề';
+                    fishTypeLabel.className = 'text-orange-400';
+                } else {
+                    fish.species = 'goldfish';
+                    fishTypeLabel.textContent = 'Cá Vàng';
+                    fishTypeLabel.className = 'text-amber-300';
+                }
+                // Hiệu ứng bong bóng nhỏ quanh cá khi biến hình
+                for (let i = 0; i < 6; i++) {
+                    spawnBubble(fish.x + (Math.random() - 0.5) * 30, fish.y + (Math.random() - 0.5) * 20);
+                }
+            });
+
+            // Nút bật/tắt máy sủi bọt khí
+            btnBubbles.addEventListener('click', () => {
+                bubblesEnabled = !bubblesEnabled;
+                bubbleStateLabel.textContent = bubblesEnabled ? 'Bật' : 'Tắt';
+                bubbleStateLabel.className = bubblesEnabled ? 'text-emerald-300' : 'text-rose-400';
+            });
+
+            // Lắng nghe thay đổi kích thước cửa sổ
+            window.addEventListener('resize', resizeCanvas);
+
+            // Khởi chạy lần đầu
+            resizeCanvas();
+            fish.x = width * 0.45;
+            fish.y = height * 0.48;
+            fish.pickNewWanderTarget();
+            requestAnimationFrame(animate);
+        };
+    </script>
+</body>
+</html>
